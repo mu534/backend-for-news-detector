@@ -1,36 +1,41 @@
-const { google } = require("googleapis");
+const express = require("express");
 const axios = require("axios");
 const metascraper = require("metascraper")([
   require("metascraper-image")(),
   require("metascraper-url")(),
 ]);
+const authenticateToken = require("../middleware/authenticateToken");
 
-const factCheck = async (req, res, next) => {
-  let { query, includeNews = false } = req.body;
+const router = express.Router();
 
-  if (!query) {
-    return res
-      .status(400)
-      .json({ message: "Please provide a query to fact-check" });
-  }
-
-  // Preprocess the query
-  query = query.trim().replace(/\s+/g, " ");
-
+// Fact-check route
+router.post("/fact-check", authenticateToken, async (req, res) => {
+  const { query, includeNews = false } = req.body;
   try {
-    // Step 1: Try Google Fact Check Tools API
+    if (!query) {
+      return res.status(400).json({ message: "Query is required" });
+    }
+
+    console.log(`Fact-check query: ${query}`);
+
+    // Fetch fact-check data
     let factCheckResults = [];
     try {
-      const factCheckTools = google.factchecktools({
-        version: "v1alpha1",
-        auth: process.env.GOOGLE_API_KEY,
-      });
-      const response = await factCheckTools.claims.search({
-        query: query,
-        pageSize: 10,
-      });
+      const factCheckResponse = await axios.get(
+        "https://factchecktools.googleapis.com/v1alpha1/claims:search",
+        {
+          params: {
+            query,
+            key: process.env.GOOGLE_API_KEY,
+            languageCode: "en",
+          },
+          timeout: 10000,
+        }
+      );
 
-      const claims = response.data.claims || [];
+      console.log("Google Fact Check API response:", factCheckResponse.data);
+
+      const claims = factCheckResponse.data.claims || [];
       factCheckResults = await Promise.all(
         claims.map(async (claim) => {
           const url = claim.claimReview?.[0]?.url || "#";
@@ -38,7 +43,6 @@ const factCheck = async (req, res, next) => {
             claim.claimReview?.[0]?.publisher?.name || "Unknown";
           let image = null;
 
-          // Fallback images for known publishers
           const publisherImages = {
             "usa today": "http://localhost:5173/images/usa-today-logo.png",
             aap: "http://localhost:5173/images/aap-logo.png",
@@ -46,7 +50,6 @@ const factCheck = async (req, res, next) => {
             default: "http://localhost:5173/images/placeholder.png",
           };
 
-          // Fetch image from the fact-check article
           if (url && url !== "#") {
             try {
               console.log(`Fetching image for URL: ${url}`);
@@ -88,7 +91,7 @@ const factCheck = async (req, res, next) => {
         })
       );
     } catch (error) {
-      console.error("Google Fact Check API error:", error.message);
+      console.error("Fact-check API error:", error.message);
       if (axios.isAxiosError(error)) {
         console.error("Axios error details:", {
           status: error.response?.status,
@@ -106,62 +109,9 @@ const factCheck = async (req, res, next) => {
           });
         }
       }
-      // Continue with empty fact-check results if the API fails
       factCheckResults = [];
     }
 
-    // Step 2: Fallback to ClaimBuster if no results from Google
-    if (factCheckResults.length === 0) {
-      try {
-        const claimBusterResponse = await axios.post(
-          "https://idir.uta.edu/claimbuster/api/v1/score/text/",
-          { text: query },
-          { headers: { "x-api-key": process.env.CLAIMBUSTER_API_KEY } }
-        );
-
-        const claimBusterResult = claimBusterResponse.data;
-        if (claimBusterResult.results && claimBusterResult.results.length > 0) {
-          const checkWorthyClaims = claimBusterResult.results
-            .filter((result) => result.score > 0.5)
-            .map((result) => ({
-              claim: result.text,
-              claimant: "N/A (ClaimBuster)",
-              date: new Date().toISOString(),
-              publisher: "ClaimBuster",
-              rating: `Check-Worthy (Score: ${result.score})`,
-              url: "#",
-              image: "http://localhost:5173/images/placeholder.png",
-            }));
-
-          if (checkWorthyClaims.length > 0) {
-            factCheckResults = checkWorthyClaims;
-          }
-        }
-      } catch (error) {
-        console.error("ClaimBuster API error:", error.message);
-        if (axios.isAxiosError(error)) {
-          console.error("Axios error details:", {
-            status: error.response?.status,
-            data: error.response?.data,
-          });
-          if (error.response?.status === 429) {
-            return res.status(429).json({
-              message:
-                "ClaimBuster API rate limit exceeded. Please try again later.",
-            });
-          }
-          if (error.response?.status === 403) {
-            return res.status(403).json({
-              message:
-                "Invalid ClaimBuster API key. Please contact the administrator.",
-            });
-          }
-        }
-        // Continue with empty fact-check results if the API fails
-      }
-    }
-
-    // Step 3: Fetch news articles if requested
     let newsResults = [];
     if (includeNews) {
       try {
@@ -207,26 +157,17 @@ const factCheck = async (req, res, next) => {
             });
           }
         }
-        // Continue with empty news results if the API fails
         newsResults = [];
       }
     }
 
-    // Step 4: Return combined results
     const response = {
       factCheckResults,
       newsResults,
     };
 
-    if (factCheckResults.length === 0 && newsResults.length === 0) {
-      return res.status(404).json({
-        message:
-          "No fact-checks, check-worthy claims, or news articles found for this query",
-      });
-    }
-
     console.log("Combined results:", response);
-    res.status(200).json(response);
+    res.json(response);
   } catch (error) {
     console.error("Fact-check endpoint error:", error.message);
     return res.status(500).json({
@@ -234,6 +175,30 @@ const factCheck = async (req, res, next) => {
         "An error occurred while processing your request. Please try again later.",
     });
   }
-};
+});
 
-module.exports = { factCheck };
+// Proxy image endpoint
+router.get("/proxy-image", async (req, res) => {
+  const { url } = req.query;
+  if (!url) {
+    return res.status(400).json({ message: "Image URL is required" });
+  }
+
+  try {
+    const response = await axios.get(url, {
+      responseType: "stream",
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+      },
+    });
+
+    res.set("Content-Type", response.headers["content-type"]);
+    response.data.pipe(res);
+  } catch (error) {
+    console.error("Image proxy error:", error.message);
+    res.status(500).json({ message: "Failed to fetch image" });
+  }
+});
+
+module.exports = router;
