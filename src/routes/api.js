@@ -94,19 +94,14 @@ router.post("/fact-check", authenticateToken, async (req, res, next) => {
         data: error.response?.data,
       });
       if (error.response?.status === 429) {
-        return res
-          .status(429)
-          .json({
-            message: "Google API rate limit exceeded. Please try again later.",
-          });
+        return res.status(429).json({
+          message: "Google API rate limit exceeded. Please try again later.",
+        });
       }
       if (error.response?.status === 403) {
-        return res
-          .status(403)
-          .json({
-            message:
-              "Invalid Google API key. Please contact the administrator.",
-          });
+        return res.status(403).json({
+          message: "Invalid Google API key. Please contact the administrator.",
+        });
       }
     }
     next(error);

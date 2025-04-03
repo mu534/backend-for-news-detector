@@ -48,7 +48,7 @@ app.use(
 app.use(express.json());
 
 // Routes
-app.use("/api", factCheckRoutes);
+app.use("/api/fact-check", factCheckRoutes);
 app.use("/api/auth", authRoutes);
 
 // Health check endpoint
@@ -67,6 +67,19 @@ app.use((err, req, res, next) => {
   res
     .status(500)
     .json({ message: "An unexpected error occurred. Please try again later." });
+});
+
+// Fact-check route
+app.post("/api/fact-check", async (req, res) => {
+  const { query, includeNews } = req.body;
+  console.log("Received request body:", req.body); // Log the incoming body
+  if (!query) {
+    return res.status(400).json({ message: "Please provide a valid query" });
+  }
+
+  // Your fact-check logic here
+
+  res.status(200).json({ message: "Success" }); // Example response
 });
 
 // Start the server

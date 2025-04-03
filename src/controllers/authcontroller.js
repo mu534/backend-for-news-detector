@@ -26,17 +26,15 @@ const signup = async (req, res, next) => {
     const token = jwt.sign(
       { userId: user._id, role: user.role }, // Include role in the token
       process.env.JWT_SECRET,
-      { expiresIn: "1h" }
+      { expiresIn: "30d" } // Token expires in 30 days
     );
 
-    res
-      .status(201)
-      .json({
-        message: "User created",
-        token,
-        email: user.email,
-        role: user.role,
-      });
+    res.status(201).json({
+      message: "User created",
+      token,
+      email: user.email,
+      role: user.role,
+    });
   } catch (error) {
     next(error);
   }
@@ -63,17 +61,15 @@ const login = async (req, res, next) => {
     const token = jwt.sign(
       { userId: user._id, role: user.role }, // Include role in the token
       process.env.JWT_SECRET,
-      { expiresIn: "1h" }
+      { expiresIn: "30d" } // Token expires in 30 days
     );
 
-    res
-      .status(200)
-      .json({
-        message: "Login successful",
-        token,
-        email: user.email,
-        role: user.role,
-      });
+    res.status(200).json({
+      message: "Login successful",
+      token,
+      email: user.email,
+      role: user.role,
+    });
   } catch (error) {
     next(error);
   }
