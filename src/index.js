@@ -1,11 +1,11 @@
-import dotenv from "dotenv";
+const dotenv = require("dotenv");
 dotenv.config();
 
-import express, { json } from "express";
-import cors from "cors";
-import { connect } from "mongoose";
-import factCheckRoutes from "./routes/fact-check.js";
-import authRoutes from "./routes/authRoutes.js";
+const express = require("express");
+const cors = require("cors");
+const { connect } = require("mongoose");
+const factCheckRoutes = require("./routes/fact-check");
+const authRoutes = require("./routes/authRoutes");
 
 const app = express();
 
@@ -43,7 +43,7 @@ app.use(
     credentials: true,
   })
 );
-app.use(json());
+app.use(express.json());
 
 app.use("/api/fact-check", factCheckRoutes);
 app.use("/api/auth", authRoutes);
