@@ -3,12 +3,11 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const mongoose = require("mongoose");
-const factCheckRoutes = require("./routes/fact-check");
-const authRoutes = require("./routes/authRoutes");
+const factCheckRoutes = require("./routes/fact-check.js");
+const authRoutes = require("./routes/authRoutes.js");
 
 const app = express();
 
-// Validate environment variables
 const requiredEnvVars = [
   "MONGO_URI",
   "JWT_SECRET",
