@@ -1,13 +1,15 @@
-require("dotenv").config();
+import dotenv from "dotenv";
+dotenv.config();
 
-const express = require("express");
-const cors = require("cors");
-const mongoose = require("mongoose");
-const factCheckRoutes = require("./routes/fact-check.js");
-const authRoutes = require("./routes/authRoutes.js");
+import express, { json } from "express";
+import cors from "cors";
+import { connect } from "mongoose";
+import factCheckRoutes from "./routes/fact-check.js";
+import authRoutes from "./routes/authRoutes.js";
 
 const app = express();
 
+// Validate environment variables
 const requiredEnvVars = [
   "MONGO_URI",
   "JWT_SECRET",
@@ -24,43 +26,36 @@ if (missingEnvVars.length > 0) {
   process.exit(1);
 }
 
-// Debug environment variables
 console.log("MONGO_URI:", process.env.MONGO_URI);
 
 // Connect to MongoDB
-mongoose
-  .connect(process.env.MONGO_URI, {})
+connect(process.env.MONGO_URI, {})
   .then(() => console.log("Connected to MongoDB"))
   .catch((err) => {
     console.error("MongoDB connection error:", err);
     process.exit(1);
   });
 
-// Middleware
 app.use(
   cors({
-    origin: "http://localhost:5173",
+    origin: ["http://localhost:5173", "https://newsdetector-livid.vercel.app"],
     methods: ["GET", "POST"],
     credentials: true,
   })
 );
-app.use(express.json());
+app.use(json());
 
-// Routes
 app.use("/api/fact-check", factCheckRoutes);
 app.use("/api/auth", authRoutes);
 
-// Health check endpoint
 app.get("/health", (req, res) => {
   res.status(200).json({ status: "OK" });
 });
 
-// Catch-all route for undefined endpoints
 app.use((req, res) => {
   res.status(404).json({ message: "Endpoint not found" });
 });
 
-// Error handling middleware
 app.use((err, req, res, next) => {
   console.error("Global error:", err.message);
   res
@@ -68,20 +63,16 @@ app.use((err, req, res, next) => {
     .json({ message: "An unexpected error occurred. Please try again later." });
 });
 
-// Fact-check route
 app.post("/api/fact-check", async (req, res) => {
   const { query, includeNews } = req.body;
-  console.log("Received request body:", req.body); // Log the incoming body
+  console.log("Received request body:", req.body);
   if (!query) {
     return res.status(400).json({ message: "Please provide a valid query" });
   }
 
-  // Your fact-check logic here
-
-  res.status(200).json({ message: "Success" }); // Example response
+  res.status(200).json({ message: "Success" });
 });
 
-// Start the server
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
