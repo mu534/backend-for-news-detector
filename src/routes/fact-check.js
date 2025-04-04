@@ -5,12 +5,10 @@ const metascraper = require("metascraper")([
   require("metascraper-url")(),
 ]);
 
-// In-memory rate limit store (user IP -> { count, resetTime })
 const rateLimitStore = new Map();
-const RATE_LIMIT = 15; // Max requests per hour
-const TIME_WINDOW = 60 * 60 * 1000; // 1 hour in milliseconds
+const RATE_LIMIT = 15;
+const TIME_WINDOW = 60 * 60 * 1000;
 
-// Utility function to check rate limit
 const checkRateLimit = (userIp) => {
   const now = Date.now();
   let userLimit = rateLimitStore.get(userIp);
@@ -33,7 +31,6 @@ const checkRateLimit = (userIp) => {
   return { exceeded: false };
 };
 
-// Fetch fact-check results from Google Fact Check Tools
 const fetchGoogleFactCheck = async (query) => {
   const factCheckTools = google.factchecktools({
     version: "v1alpha1",
