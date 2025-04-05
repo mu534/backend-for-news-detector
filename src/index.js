@@ -9,7 +9,6 @@ const authRoutes = require("./routes/authRoutes");
 
 const app = express();
 
-// Validate environment variables
 const requiredEnvVars = [
   "MONGO_URI",
   "JWT_SECRET",
@@ -28,21 +27,25 @@ if (missingEnvVars.length > 0) {
 
 console.log("MONGO_URI:", process.env.MONGO_URI);
 
-// Connect to MongoDB
-connect(process.env.MONGO_URI, {})
-  .then(() => console.log("Connected to MongoDB"))
+connect(process.env.MONGO_URI)
+  .then(() => console.log("✅ Connected to MongoDB"))
   .catch((err) => {
-    console.error("MongoDB connection error:", err);
+    console.error("❌ MongoDB connection error:", err);
     process.exit(1);
   });
 
 app.use(
   cors({
-    origin: ["http://localhost:5173", "https://newsdetector-livid.vercel.app"],
-    methods: ["GET", "POST"],
+    origin: [
+      "http://localhost:5173",
+      "https://newsdetector-livid.vercel.app",
+      "https://newsdetector-jd1h3nj8w-mu534s-projects.vercel.app",
+    ],
+    methods: ["GET", "POST", "PUT", "DELETE"],
     credentials: true,
   })
 );
+
 app.use(express.json());
 
 app.use("/api/fact-check", factCheckRoutes);
@@ -64,16 +67,14 @@ app.use((err, req, res, next) => {
 });
 
 app.post("/api/fact-check", async (req, res) => {
-  const { query, includeNews } = req.body;
-  console.log("Received request body:", req.body);
+  const { query } = req.body;
   if (!query) {
     return res.status(400).json({ message: "Please provide a valid query" });
   }
-
-  res.status(200).json({ message: "Success" });
+  res.status(200).json({ message: "Success", query });
 });
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`🚀 Server running on port ${PORT}`);
 });
