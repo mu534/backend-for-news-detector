@@ -4,18 +4,17 @@ dotenv.config();
 const express = require("express");
 const cors = require("cors");
 const { connect } = require("mongoose");
-const factCheck = require("./routes/fact-check"); // Rename to match your file
+const factCheck = require("./routes/fact-check"); // Ensure this path is correct
 const authRoutes = require("./routes/authRoutes");
 
 const app = express();
 
-// Check required environment variables
 const requiredEnvVars = [
   "MONGO_URI",
   "JWT_SECRET",
   "GOOGLE_API_KEY",
   "GNEWS_API_KEY",
-  "CLAIMBUSTER_API_KEY", // Added since factCheck.js uses it
+  "CLAIMBUSTER_API_KEY",
 ];
 const missingEnvVars = requiredEnvVars.filter(
   (varName) => !process.env[varName]
@@ -27,8 +26,6 @@ if (missingEnvVars.length > 0) {
   process.exit(1);
 }
 
-// MongoDB connection
-console.log("MONGO_URI:", process.env.MONGO_URI);
 connect(process.env.MONGO_URI)
   .then(() => console.log("✅ Connected to MongoDB"))
   .catch((err) => {
@@ -36,7 +33,6 @@ connect(process.env.MONGO_URI)
     process.exit(1);
   });
 
-// CORS configuration
 app.use(
   cors({
     origin: [
@@ -49,24 +45,19 @@ app.use(
   })
 );
 
-// Middleware
 app.use(express.json());
 
-// Routes
-app.use("/api/auth", authRoutes); // Handles /api/auth/* routes
-app.use("/api/auth/fact-check", factCheck); // Mount fact-check at /api/auth/fact-check
+app.use("/api/auth", authRoutes);
+app.use("/api/auth/fact-check", factCheck); // This should handle POST /api/auth/fact-check
 
-// Health check
 app.get("/health", (req, res) => {
   res.status(200).json({ status: "OK" });
 });
 
-// 404 handler
 app.use((req, res) => {
   res.status(404).json({ message: "Endpoint not found" });
 });
 
-// Global error handler
 app.use((err, req, res, next) => {
   console.error("Global error:", err.message);
   res
@@ -74,7 +65,6 @@ app.use((err, req, res, next) => {
     .json({ message: "An unexpected error occurred. Please try again later." });
 });
 
-// Start server
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
