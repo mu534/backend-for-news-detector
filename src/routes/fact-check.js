@@ -1,5 +1,6 @@
 const { google } = require("googleapis");
 const axios = require("axios");
+const jwt = require("jsonwebtoken");
 const metascraper = require("metascraper")([
   require("metascraper-image")(),
   require("metascraper-url")(),
@@ -22,7 +23,7 @@ const checkRateLimit = (userIp) => {
     const timeLeft = Math.ceil((userLimit.resetTime - now) / 1000 / 60);
     return {
       exceeded: true,
-      message: `Rate limit exceeded. You can make more requests in ${timeLeft} minutes.`,
+      message: `Rate limit exceeded. Please wait ${timeLeft} minutes.`,
     };
   }
 
@@ -48,10 +49,10 @@ const fetchGoogleFactCheck = async (query) => {
       const url = claim.claimReview?.[0]?.url || "#";
       const publisher = claim.claimReview?.[0]?.publisher?.name || "Unknown";
       const publisherImages = {
-        "usa today": "http://localhost:5173/images/usa-today-logo.png",
-        aap: "http://localhost:5173/images/aap-logo.png",
-        "full fact": "http://localhost:5173/images/full-fact-logo.png",
-        default: "http://localhost:5173/images/placeholder.png",
+        "usa today": "/images/usa-today-logo.png",
+        aap: "/images/aap-logo.png",
+        "full fact": "/images/full-fact-logo.png",
+        default: "/images/placeholder.png",
       };
       let image =
         publisherImages[publisher.toLowerCase()] || publisherImages["default"];
@@ -88,7 +89,6 @@ const fetchGoogleFactCheck = async (query) => {
   );
 };
 
-// Fetch fact-check results from ClaimBuster (fallback)
 const fetchClaimBuster = async (query) => {
   const { data } = await axios.post(
     "https://idir.uta.edu/claimbuster/api/v1/score/text/",
@@ -103,13 +103,12 @@ const fetchClaimBuster = async (query) => {
       claimant: "N/A",
       date: new Date().toISOString(),
       publisher: "ClaimBuster",
-      rating: `Check-Worthy (Score: ${result.score})`,
+      rating: `Check-Worthy (Score: ${result.score.toFixed(2)})`,
       url: "#",
-      image: "http://localhost:5173/images/placeholder.png",
+      image: "/images/placeholder.png",
     }));
 };
 
-// Fetch news results from GNews
 const fetchNews = async (query) => {
   const { data } = await axios.get("https://gnews.io/api/v4/search", {
     params: {
@@ -135,11 +134,25 @@ const fetchNews = async (query) => {
 };
 
 const factCheck = async (req, res) => {
-  const { query, includeNews = false } = req.body;
+  // Authentication check
+  const token = req.headers.authorization?.split("Bearer ")[1];
+  if (!token) {
+    return res.status(401).json({ message: "Authentication required" });
+  }
+
+  try {
+    jwt.verify(token, process.env.JWT_SECRET);
+  } catch (error) {
+    return res.status(401).json({ message: "Invalid or expired token" });
+  }
+
+  const { content, includeNews = false } = req.body;
   const userIp = req.ip;
 
-  if (!query || typeof query !== "string" || query.trim() === "") {
-    return res.status(400).json({ message: "Please provide a valid query" });
+  if (!content || typeof content !== "string" || content.trim() === "") {
+    return res
+      .status(400)
+      .json({ message: "Please provide valid content to verify" });
   }
 
   const rateLimitResult = checkRateLimit(userIp);
@@ -147,12 +160,12 @@ const factCheck = async (req, res) => {
     return res.status(429).json({ message: rateLimitResult.message });
   }
 
-  const trimmedQuery = query.trim().replace(/\s+/g, " ");
+  const trimmedContent = content.trim().replace(/\s+/g, " ");
 
   try {
     let factCheckResults = [];
     try {
-      factCheckResults = await fetchGoogleFactCheck(trimmedQuery);
+      factCheckResults = await fetchGoogleFactCheck(trimmedContent);
     } catch (error) {
       if (axios.isAxiosError(error)) {
         if (error.response?.status === 429) {
@@ -167,10 +180,9 @@ const factCheck = async (req, res) => {
       console.warn(`Google Fact Check failed: ${error.message}`);
     }
 
-    // Fallback to ClaimBuster if no results
     if (factCheckResults.length === 0) {
       try {
-        factCheckResults = await fetchClaimBuster(trimmedQuery);
+        factCheckResults = await fetchClaimBuster(trimmedContent);
       } catch (error) {
         console.warn(`ClaimBuster failed: ${error.message}`);
       }
@@ -179,7 +191,7 @@ const factCheck = async (req, res) => {
     let newsResults = [];
     if (includeNews) {
       try {
-        newsResults = await fetchNews(trimmedQuery);
+        newsResults = await fetchNews(trimmedContent);
       } catch (error) {
         console.warn(`GNews failed: ${error.message}`);
       }
@@ -188,7 +200,7 @@ const factCheck = async (req, res) => {
     if (factCheckResults.length === 0 && newsResults.length === 0) {
       return res
         .status(404)
-        .json({ message: "No results found for this query" });
+        .json({ message: "No fact-check results found for this content" });
     }
 
     res.status(200).json({ factCheckResults, newsResults });
