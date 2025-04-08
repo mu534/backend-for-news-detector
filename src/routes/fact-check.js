@@ -1,6 +1,7 @@
+const express = require("express");
+const router = express.Router();
 const { google } = require("googleapis");
 const axios = require("axios");
-const jwt = require("jsonwebtoken");
 const metascraper = require("metascraper")([
   require("metascraper-image")(),
   require("metascraper-url")(),
@@ -8,7 +9,7 @@ const metascraper = require("metascraper")([
 
 const rateLimitStore = new Map();
 const RATE_LIMIT = 15;
-const TIME_WINDOW = 60 * 60 * 1000;
+const TIME_WINDOW = 60 * 60 * 1000; // 1 hour
 
 const checkRateLimit = (userIp) => {
   const now = Date.now();
@@ -133,19 +134,8 @@ const fetchNews = async (query) => {
   }));
 };
 
-const factCheck = async (req, res) => {
-  // Authentication check
-  const token = req.headers.authorization?.split("Bearer ")[1];
-  if (!token) {
-    return res.status(401).json({ message: "Authentication required" });
-  }
-
-  try {
-    jwt.verify(token, process.env.JWT_SECRET);
-  } catch (error) {
-    return res.status(401).json({ message: "Invalid or expired token" });
-  }
-
+// Define the route
+router.post("/", async (req, res) => {
   const { content, includeNews = false } = req.body;
   const userIp = req.ip;
 
@@ -208,6 +198,6 @@ const factCheck = async (req, res) => {
     console.error(`Unexpected error in fact-check: ${error.message}`);
     res.status(500).json({ message: "Server error. Please try again later." });
   }
-};
+});
 
-module.exports = factCheck;
+module.exports = router;
